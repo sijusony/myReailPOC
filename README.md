@@ -26,18 +26,7 @@ API Information is available under swagger UI below
 http://localhost:8080/swagger-ui.html#/
 username : myretail	
 password : myretail
- 
-Get Request Info
- 
 
-
-
-
-
-
-
-POST Request Info
- 
 
 Testing Application:
 
