@@ -9,14 +9,10 @@ import org.myretail.util.PropertiesUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheConfig;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,10 +24,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 //@CacheConfig(cacheNames = "productName")
 public class ProductInfoHandler {
 
+	private static final String ERROR_CONNECTING_TO_REDSKY_SERVICE = "Error connecting to redsky service";
+
+	private static final String ERROR_PARSING_JSON = "Error parsing json in getPrdInfoFrmRedsky() for id";
+
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
 	@Autowired
 	PropertiesUtil propertiesUtil;
+	
+	@Autowired
+	private RestTemplate restTemplate;
 
 	/**
 	 * Gets product name from redsky api
@@ -45,36 +48,48 @@ public class ProductInfoHandler {
 	public String getPrdInfoFrmRedsky(int id) throws JsonProcessingException, IOException {
 
 		JsonNode product = null;
-		RestTemplate restTemplate = new RestTemplate();
 		int counter = 0;
-		boolean isProductInfoAvailable = false;
 		do {
 			logger.info("Calling Redsky API for product ="+id);
 			try {
 				ResponseEntity<String> responseEntity = restTemplate.getForEntity(propertiesUtil.getRedskyURL()+id+MessageConstant.EXCLUSIONS,
-						String.class);
+								String.class);
+						
 				if(responseEntity.getStatusCode().equals(HttpStatus.OK)) {
 					product = retreiveProductName(responseEntity);
-					isProductInfoAvailable = true;
+					if(StringUtils.isEmpty(product.asText())) {
+						logger.error(ERROR_PARSING_JSON +id );
+						throw new TargetPricingException(ERROR_PARSING_JSON +id);
+					}
+					break;
 				}else {
-					//
-					isProductInfoAvailable = false;
 					counter++;
-					logger.error("Error calling redsky service");
+					logger.error("Error calling redsky service, id"+id);
 					
 				}
-			} catch (RestClientException e) {
-				isProductInfoAvailable = false;
+			}catch (TargetPricingException e) { 
+				throw new TargetPricingException(e.getMessage());
+			}catch (Exception e) {
+			
+				//isProductInfoAvailable = false;
 				counter++;
+				sleepThread();
 				if(null == product && counter>=3) {
-					logger.error("Error connecting to redsky service" + e.getMessage());
-					throw new TargetPricingException("Error calling redsky service"+e.getMessage());
+					logger.error(ERROR_CONNECTING_TO_REDSKY_SERVICE + e.getMessage());
+					throw new TargetPricingException(ERROR_CONNECTING_TO_REDSKY_SERVICE+e.getMessage());
 				}
 			}
 			//retry 3 times in case there is no response from redsky
-		} while(counter <=3 && !isProductInfoAvailable);
+		} while(counter <=3 );
 		
 		return product.asText();
+	}
+
+	private void sleepThread()  {
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {
+		}
 	}
 
 	private JsonNode retreiveProductName(ResponseEntity<String> responseEntity)

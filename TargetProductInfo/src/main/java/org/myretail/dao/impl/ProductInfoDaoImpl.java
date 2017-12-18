@@ -46,7 +46,7 @@ public class ProductInfoDaoImpl implements ProductPriceInfoDao{
 
 	@Override
 	public List<Product> select(int id) {
-		return cassandraTemplate.select("select * from price_info where product_id="+id, Product.class);
+		return cassandraTemplate.select("select * from price_info where product_id="+id+" limit 1", Product.class);
 	}
 
 }
